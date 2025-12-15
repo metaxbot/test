@@ -1,3 +1,6 @@
+// =======================
+// REQUIRED MODULES
+// =======================
 const login = require("@dongdev/fca-unofficial");
 const fs = require("fs");
 const path = require("path");
@@ -7,12 +10,15 @@ const config = require("./config.json");
 const { connectDB, stats, saveStatsDebounced } = require("./utils/database");
 const { loadCommands, loadEvents } = require("./utils/loader");
 
+// =======================
+// BASIC SETUP
+// =======================
 const app = express();
 const startTime = Date.now();
 
-/* =======================
-   DASHBOARD (EXPRESS)
-======================= */
+// =======================
+// DASHBOARD (EXPRESS)
+// =======================
 app.use(express.static("dashboard"));
 
 app.get("/", (req, res) => {
@@ -24,22 +30,22 @@ app.listen(PORT, () =>
   console.log(`🌐 Dashboard running on port ${PORT}`)
 );
 
-/* =======================
-   PERMISSION SYSTEM
-======================= */
+// =======================
+// PERMISSION SYSTEM (1–5)
+// =======================
 async function hasPermission(api, event, level) {
   const uid = event.senderID;
 
   const isBotAdmin = config.admins.includes(uid);
   const isModerator = config.moderators.includes(uid);
 
-  // 5 → Bot Admin only
+  // notes: level 5 → only bot admins
   if (level === 5) return isBotAdmin;
 
-  // 4 → Bot Admin + Moderator
+  // notes: level 4 → bot admins + moderators
   if (level === 4) return isBotAdmin || isModerator;
 
-  // Group admin check
+  // notes: check group admin (facebook group admin)
   let isGroupAdmin = false;
   if (event.isGroup) {
     try {
@@ -48,26 +54,29 @@ async function hasPermission(api, event, level) {
     } catch {}
   }
 
-  // 3 → Bot Admin + Group Admin
+  // notes: level 3 → bot admins + group admins
   if (level === 3) return isBotAdmin || isGroupAdmin;
 
-  // 2 → Bot Admin + Moderator + Group Admin
+  // notes: level 2 → bot admins + moderators + group admins
   if (level === 2)
     return isBotAdmin || isModerator || isGroupAdmin;
 
-  // 1 → All users
+  // notes: level 1 → all users
   return true;
 }
 
-/* =======================
-   MAIN BOT
-======================= */
+// =======================
+// MAIN BOT LOGIC
+// =======================
 (async () => {
+  // notes: connect MongoDB once at startup
   await connectDB();
 
+  // notes: load all commands & events dynamically
   const commands = loadCommands();
   const events = loadEvents();
 
+  // notes: login using appstate.json (no email/password)
   const appState = JSON.parse(
     fs.readFileSync("appstate.json", "utf8")
   );
@@ -79,13 +88,15 @@ async function hasPermission(api, event, level) {
     }
 
     api.setOptions({
-      selfListen: false,
+      selfListen: false, // notes: ignore own messages
       listenEvents: true
     });
 
     const botUID = api.getCurrentUserID();
 
-    // Auto add owner as admin
+    // =======================
+    // AUTO OWNER → ADMIN
+    // =======================
     if (!config.admins.includes(botUID)) {
       config.admins.push(botUID);
       fs.writeFileSync(
@@ -97,46 +108,85 @@ async function hasPermission(api, event, level) {
 
     console.log("🤖 Bot logged in as:", botUID);
 
+    // =======================
+    // MESSAGE LISTENER
+    // =======================
     api.listenMqtt(async (err, event) => {
       if (err) return console.error(err);
 
-      // Ignore own messages
+      // notes: ignore bot's own messages
       if (event.senderID === botUID) return;
 
-      /* ========= EVENTS ========= */
+      // =======================
+      // EVENTS HANDLER
+      // =======================
       if (events[event.type]) {
         events[event.type](api, event);
       }
 
+      // notes: only handle text messages
       if (event.type !== "message" || !event.body) return;
 
+      // =======================
+      // DATABASE STATS
+      // =======================
       stats.totalMessages++;
       saveStatsDebounced();
 
-      const prefix = config.prefix;
       const body = event.body.trim();
+      const prefix = config.prefix;
 
-      // Prefix check
-      if (!body.startsWith(prefix)) {
-        if (config.autoReply) {
-          api.sendMessage(
-            `🤖 ${config.botName}\nUse prefix "${prefix}" to run commands`,
-            event.threadID
-          );
-        }
-        return;
+      let cmdName;
+      let args = [];
+      let usedPrefix = false;
+
+      // =======================
+      // PREFIX PARSER (CORE FIX)
+      // =======================
+
+      // notes: CASE 1 → prefix used
+      if (body.startsWith(prefix)) {
+        usedPrefix = true;
+
+        const withoutPrefix = body
+          .slice(prefix.length)
+          .trim();
+
+        if (!withoutPrefix) return;
+
+        const parts = withoutPrefix.split(/\s+/);
+        cmdName = parts.shift().toLowerCase();
+        args = parts;
       }
 
-      const args = body.slice(prefix.length).trim().split(/\s+/);
-      const cmdName = args.shift().toLowerCase();
+      // notes: CASE 2 → no prefix
+      else {
+        const parts = body.split(/\s+/);
+        cmdName = parts.shift().toLowerCase();
+        args = parts;
+      }
 
+      // notes: find command (supports altnames)
       const command = commands.get(cmdName);
       if (!command) return;
 
-      // Prefix false command support
-      if (command.prefix === false && body.startsWith(prefix)) return;
+      // =======================
+      // PREFIX RULE CHECK
+      // =======================
 
-      // Permission check
+      // notes: prefix:true command but user didn't use prefix
+      if (command.prefix !== false && !usedPrefix) {
+        return;
+      }
+
+      // notes: prefix:false command but user used prefix
+      if (command.prefix === false && usedPrefix) {
+        return;
+      }
+
+      // =======================
+      // PERMISSION CHECK
+      // =======================
       const allowed = await hasPermission(
         api,
         event,
@@ -150,7 +200,9 @@ async function hasPermission(api, event, level) {
         );
       }
 
-      /* ========= RUN COMMAND ========= */
+      // =======================
+      // RUN COMMAND SAFELY
+      // =======================
       try {
         await command.run({
           api,
@@ -161,7 +213,10 @@ async function hasPermission(api, event, level) {
           stats
         });
       } catch (e) {
-        console.error(`❌ Error in command ${command.name}`, e);
+        console.error(
+          `❌ Error in command ${command.name}`,
+          e
+        );
         api.sendMessage(
           "⚠️ Command execution error",
           event.threadID
