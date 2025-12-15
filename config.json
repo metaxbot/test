@@ -9,5 +9,7 @@
 
   "moderators": [
     "100048258944357"
-  ]
+  ],
+  
+  "mongoURI": "mongodb+srv://dattab1972_db_user:Fz5m6BT8qi3KsTMi@zeroexbot-db.fiusltz.mongodb.net/zeroexbot?retryWrites=true&w=majority&appName=zeroexbot-db"
 }
