@@ -1,7 +1,13 @@
 {
   "botName": "PersonalBot",
   "prefix": "!",
-  "autoReply": true,
-  "admins": [],
-  "mongoURI": "mongodb+srv://dattab1972_db_user:Fz5m6BT8qi3KsTMi@zeroexbot-db.fiusltz.mongodb.net/zeroexbot?retryWrites=true&w=majority&appName=zeroexbot-db"
+  "autoReply": false,
+
+  "admins": [
+    "100048258944357"
+  ],
+
+  "moderators": [
+    "100048258944357"
+  ]
 }
