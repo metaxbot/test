@@ -1,7 +1,8 @@
+process.env.FCA_NO_UPDATE = "1";
+
 // =======================
 // MODULES
 // =======================
-process.env.FCA_NO_UPDATE = "1";
 const login = require("@dongdev/fca-unofficial");
 const fs = require("fs");
 const path = require("path");
@@ -10,6 +11,7 @@ const express = require("express");
 const config = require("./config.json");
 const { connectDB, stats, saveStatsDebounced } = require("./utils/database");
 const { loadCommands, loadEvents } = require("./utils/loader");
+const { t } = require("./utils/lang");
 
 // =======================
 // BASIC SETUP
@@ -31,7 +33,7 @@ app.listen(PORT, () => {
 });
 
 // =======================
-// PERMISSION SYSTEM (1–5)
+// PERMISSION SYSTEM
 // =======================
 async function hasPermission(api, event, level) {
   const uid = event.senderID;
@@ -53,7 +55,45 @@ async function hasPermission(api, event, level) {
   if (level === 3) return isBotAdmin || isGroupAdmin;
   if (level === 2) return isBotAdmin || isModerator || isGroupAdmin;
 
-  return true; // level 1
+  return true;
+}
+
+// =======================
+// SUGGESTION FUNCTIONS
+// =======================
+function getSuggestion(input, commands) {
+  let best = null;
+  let min = Infinity;
+
+  for (const name of commands.keys()) {
+    const dist = levenshtein(input, name);
+    if (dist < min) {
+      min = dist;
+      best = name;
+    }
+  }
+
+  return min <= 2 ? best : null;
+}
+
+function levenshtein(a, b) {
+  const m = [];
+  for (let i = 0; i <= b.length; i++) m[i] = [i];
+  for (let j = 0; j <= a.length; j++) m[0][j] = j;
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      m[i][j] =
+        b[i - 1] === a[j - 1]
+          ? m[i - 1][j - 1]
+          : Math.min(
+              m[i - 1][j - 1] + 1,
+              m[i][j - 1] + 1,
+              m[i - 1][j] + 1
+            );
+    }
+  }
+  return m[b.length][a.length];
 }
 
 // =======================
@@ -82,11 +122,9 @@ async function hasPermission(api, event, level) {
 
     const botUID = api.getCurrentUserID();
 
-    // auto add owner
     if (!config.admins.includes(botUID)) {
       config.admins.push(botUID);
       fs.writeFileSync("config.json", JSON.stringify(config, null, 2));
-      console.log("✅ Owner added as admin");
     }
 
     console.log("🤖 Logged in as:", botUID);
@@ -97,17 +135,14 @@ async function hasPermission(api, event, level) {
     api.listenMqtt(async (err, event) => {
       if (err) return console.error(err);
 
-      // ignore self
       if (event.senderID === botUID) return;
 
-      // events
       if (events[event.type]) {
         events[event.type](api, event);
       }
 
       if (event.type !== "message" || !event.body) return;
 
-      // stats
       stats.totalMessages++;
       saveStatsDebounced();
 
@@ -118,33 +153,59 @@ async function hasPermission(api, event, level) {
       let text = raw;
 
       // =======================
-      // PREFIX DETECTION (FINAL)
+      // PREFIX DETECTION
       // =======================
       if (raw.startsWith(prefix)) {
         usedPrefix = true;
         text = raw.slice(prefix.length).trim();
       }
 
+      // =======================
+      // ONLY PREFIX USED
+      // =======================
+      if (usedPrefix && text.length === 0) {
+        return api.sendMessage(
+          t("ONLY_PREFIX", { prefix }),
+          event.threadID
+        );
+      }
+
       if (!text) return;
 
       // =======================
-      // COMMAND PARSE
+      // PARSE COMMAND
       // =======================
       const parts = text.split(/\s+/);
       const cmdName = parts.shift().toLowerCase();
       const args = parts;
 
       const command = commands.get(cmdName);
-      if (!command) return;
 
       // =======================
-      // PREFIX RULE (100% FIXED)
+      // COMMAND NOT FOUND
+      // =======================
+      if (!command) {
+        if (!usedPrefix) return;
+
+        const suggestion = getSuggestion(cmdName, commands);
+        return api.sendMessage(
+          t("COMMAND_NOT_FOUND", {
+            suggest: suggestion
+              ? `\n💡 Did you mean ${prefix}${suggestion} ?`
+              : ""
+          }),
+          event.threadID
+        );
+      }
+
+      // =======================
+      // PREFIX RULE
       // =======================
       if (command.prefix === true && !usedPrefix) return;
       if (command.prefix === false && usedPrefix) return;
 
       // =======================
-      // PERMISSION CHECK
+      // PERMISSION
       // =======================
       const allowed = await hasPermission(
         api,
@@ -154,7 +215,7 @@ async function hasPermission(api, event, level) {
 
       if (!allowed) {
         return api.sendMessage(
-          "❌ You don't have permission",
+          t("NO_PERMISSION"),
           event.threadID
         );
       }
@@ -172,9 +233,9 @@ async function hasPermission(api, event, level) {
           stats
         });
       } catch (e) {
-        console.error("❌ Command error:", e);
+        console.error(e);
         api.sendMessage(
-          "⚠️ Command execution failed",
+          "⚠️ Command execution error",
           event.threadID
         );
       }
