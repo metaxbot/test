@@ -6,7 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@dongdev/fca-unofficial": "latest",
+    "@dongdev/fca-unofficial": "3.0.17",
     "express": "^4.18.2",
     "mongoose": "^7.6.0"
   }
