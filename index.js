@@ -1,6 +1,7 @@
 // =======================
 // MODULES
 // =======================
+process.env.FCA_NO_UPDATE = "1";
 const login = require("@dongdev/fca-unofficial");
 const fs = require("fs");
 const path = require("path");
