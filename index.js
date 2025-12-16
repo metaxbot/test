@@ -59,7 +59,7 @@ async function hasPermission(api, event, level) {
 }
 
 // =======================
-// SUGGESTION FUNCTIONS
+// COMMAND SUGGESTION
 // =======================
 function getSuggestion(input, commands) {
   let best = null;
@@ -161,7 +161,7 @@ function levenshtein(a, b) {
       }
 
       // =======================
-      // ONLY PREFIX USED
+      // ONLY PREFIX USED ✅
       // =======================
       if (usedPrefix && text.length === 0) {
         return api.sendMessage(
@@ -170,6 +170,9 @@ function levenshtein(a, b) {
         );
       }
 
+      // =======================
+      // IGNORE EMPTY
+      // =======================
       if (!text) return;
 
       // =======================
