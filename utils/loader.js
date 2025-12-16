@@ -1,24 +1,50 @@
 const fs = require("fs");
 const path = require("path");
 
-/**
- * Load commands with altnames support
- */
+const REQUIRED_KEYS = [
+  "name",
+  "author",
+  "version",
+  "permission",
+  "prefix",
+  "description",
+  "dependence",
+  "run"
+];
+
+function validateCommand(cmd, fileName) {
+  for (const key of REQUIRED_KEYS) {
+    if (!(key in cmd)) {
+      console.warn(
+        `⚠️ Command "${fileName}" skipped → missing "${key}"`
+      );
+      return false;
+    }
+  }
+
+  if (typeof cmd.run !== "function") {
+    console.warn(
+      `⚠️ Command "${fileName}" skipped → run is not a function`
+    );
+    return false;
+  }
+
+  return true;
+}
+
 function loadCommands() {
   const commands = new Map();
-  const cmdPath = path.join(__dirname, "..", "commands");
-
-  const files = fs.readdirSync(cmdPath).filter(f => f.endsWith(".js"));
+  const cmdDir = path.join(__dirname, "..", "commands");
+  const files = fs.readdirSync(cmdDir).filter(f => f.endsWith(".js"));
 
   for (const file of files) {
-    const cmd = require(path.join(cmdPath, file));
+    const cmdPath = path.join(cmdDir, file);
+    const cmd = require(cmdPath);
 
-    if (!cmd.name) continue;
+    if (!validateCommand(cmd, file)) continue;
 
-    // main name
     commands.set(cmd.name.toLowerCase(), cmd);
 
-    // altnames support
     if (Array.isArray(cmd.altnames)) {
       for (const alt of cmd.altnames) {
         commands.set(alt.toLowerCase(), cmd);
@@ -30,19 +56,14 @@ function loadCommands() {
   return commands;
 }
 
-/**
- * Load events
- */
 function loadEvents() {
   const events = {};
-  const evtPath = path.join(__dirname, "..", "events");
-
-  const files = fs.readdirSync(evtPath).filter(f => f.endsWith(".js"));
+  const evtDir = path.join(__dirname, "..", "events");
+  const files = fs.readdirSync(evtDir).filter(f => f.endsWith(".js"));
 
   for (const file of files) {
-    const evt = require(path.join(evtPath, file));
+    const evt = require(path.join(evtDir, file));
     if (!evt.type || typeof evt.run !== "function") continue;
-
     events[evt.type] = evt.run;
   }
 
