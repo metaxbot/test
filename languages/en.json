@@ -1,0 +1,5 @@
+{
+  "ONLY_PREFIX": "⚠️ You only used prefix.\nUse {prefix}help to see commands.",
+  "COMMAND_NOT_FOUND": "❌ Command not found.{suggest}",
+  "NO_PERMISSION": "❌ You don't have permission to use this command."
+}
